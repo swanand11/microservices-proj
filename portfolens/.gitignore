@@ -1,0 +1,27 @@
+# Java / Maven
+**/target/
+*.class
+*.log
+
+# Node / Vite
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Local configuration and secrets
+**/.env
+**/.env.*.local
+!.env.example
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+
+# Python market data service
+__pycache__/
+.pytest_cache/
+.venv/
+*.py[cod]
+portfolens/market-data-service/data/historical_prices/*.csv
+portfolens/market-data-service/data/historical_prices/*.metadata.json

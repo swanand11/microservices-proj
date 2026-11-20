@@ -1,0 +1,11 @@
+symbol,company_name,bse_scrip_code,yahoo_ticker,exchange,sector,industry,active
+RELIANCE,Reliance Industries Limited,500325,RELIANCE.BO,BSE,Energy,Oil Gas and Conglomerates,true
+TCS,Tata Consultancy Services Limited,532540,TCS.BO,BSE,Information Technology,IT Services,true
+HDFCBANK,HDFC Bank Limited,500180,HDFCBANK.BO,BSE,Financial Services,Banks,true
+INFY,Infosys Limited,500209,INFY.BO,BSE,Information Technology,IT Services,true
+ITC,ITC Limited,500875,ITC.BO,BSE,Consumer Goods,FMCG,true
+ICICIBANK,ICICI Bank Limited,532174,ICICIBANK.BO,BSE,Financial Services,Banks,true
+SBIN,State Bank of India,500112,SBIN.BO,BSE,Financial Services,Banks,true
+BHARTIARTL,Bharti Airtel Limited,532454,BHARTIARTL.BO,BSE,Telecommunications,Telecom Services,true
+LT,Larsen and Toubro Limited,500510,LT.BO,BSE,Industrials,Engineering and Construction,true
+WIPRO,Wipro Limited,507685,WIPRO.BO,BSE,Information Technology,IT Services,true
