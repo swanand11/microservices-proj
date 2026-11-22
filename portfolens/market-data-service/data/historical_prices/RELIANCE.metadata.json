@@ -1,0 +1,5 @@
+{
+  "source": "Yahoo Finance",
+  "downloaded_at": "2026-11-22T13:13:36.065957+00:00",
+  "price_policy": "auto_adjust=False; raw OHLC/Close and Yahoo Adj Close kept separately"
+}

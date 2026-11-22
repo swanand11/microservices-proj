@@ -1,6 +1,6 @@
 import csv
 from dataclasses import dataclass
-from app.config import STOCKS_FILE
+from .config import STOCKS_FILE
 
 
 @dataclass(frozen=True)

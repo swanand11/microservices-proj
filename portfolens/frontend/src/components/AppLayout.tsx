@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
 export function AppLayout() {
@@ -7,7 +7,7 @@ export function AppLayout() {
   const signOut = () => { logout(); navigate('/login', { replace: true }) }
   return <div className="app-shell">
     <aside className="sidebar">
-      <a className="brand" href="/dashboard"><span className="brand-mark">P</span><span>portfo<span className="accent">lens</span></span></a>
+      <Link className="brand" to="/dashboard"><span className="brand-mark">P</span><span>portfo<span className="accent">lens</span></span></Link>
       <div className="nav-label">WORKSPACE</div>
       <nav className="side-links">
         <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'side-link active' : 'side-link'}><span>◫</span> Overview</NavLink>
@@ -17,6 +17,6 @@ export function AppLayout() {
       </nav>
       <div className="sidebar-bottom"><div className="user-mini"><div className="avatar">{user?.fullName.slice(0, 1).toUpperCase()}</div><div className="user-mini-info"><strong>{user?.fullName}</strong><span>{user?.email}</span></div><button className="icon-button" onClick={signOut} aria-label="Log out" title="Log out">↗</button></div></div>
     </aside>
-    <main className="main-area"><header className="mobile-header"><a className="brand" href="/dashboard"><span className="brand-mark">P</span><span>portfo<span className="accent">lens</span></span></a><nav><NavLink to="/dashboard">Overview</NavLink><NavLink to="/portfolios">Portfolios</NavLink><NavLink to="/market">Market</NavLink><NavLink to="/profile">Profile</NavLink><button onClick={signOut}>Log out</button></nav></header><Outlet /></main>
+    <main className="main-area"><header className="mobile-header"><Link className="brand" to="/dashboard"><span className="brand-mark">P</span><span>portfo<span className="accent">lens</span></span></Link><nav><NavLink to="/dashboard">Overview</NavLink><NavLink to="/portfolios">Portfolios</NavLink><NavLink to="/market">Market</NavLink><NavLink to="/profile">Profile</NavLink><button onClick={signOut}>Log out</button></nav></header><Outlet /></main>
   </div>
 }

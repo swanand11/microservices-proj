@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "portfolio_transactions", indexes = @Index(name = "idx_transactions_portfolio_date", columnList = "portfolio_id, transaction_date"))
+@Table(name = "portfolio_transactions", indexes = @Index(name = "idx_transactions_portfolio_date", columnList = "portfolio_id, transaction_date"), uniqueConstraints = @UniqueConstraint(name = "uk_transaction_idempotency", columnNames = {"portfolio_id", "idempotency_key"}))
 public class PortfolioTransaction {
     public enum Type { BUY, SELL }
     @Id private UUID id;
@@ -16,9 +16,10 @@ public class PortfolioTransaction {
     @Column(nullable = false, precision = 24, scale = 8) private BigDecimal quantity;
     @Column(nullable = false, precision = 19, scale = 4) private BigDecimal price;
     @Column(nullable = false) private Instant transactionDate;
+    @Column(name = "idempotency_key", length = 100) private String idempotencyKey;
     @Column(nullable = false, updatable = false) private Instant createdAt;
     protected PortfolioTransaction() {}
-    public PortfolioTransaction(Portfolio portfolio, Stock stock, Type type, BigDecimal quantity, BigDecimal price, Instant transactionDate) { id = UUID.randomUUID(); this.portfolio = portfolio; this.stock = stock; this.transactionType = type; this.quantity = quantity; this.price = price; this.transactionDate = transactionDate; }
+    public PortfolioTransaction(Portfolio portfolio, Stock stock, Type type, BigDecimal quantity, BigDecimal price, Instant transactionDate, String idempotencyKey) { id = UUID.randomUUID(); this.portfolio = portfolio; this.stock = stock; this.transactionType = type; this.quantity = quantity; this.price = price; this.transactionDate = transactionDate; this.idempotencyKey = idempotencyKey; }
     @PrePersist void create() { createdAt = Instant.now(); }
-    public UUID getId() { return id; } public Portfolio getPortfolio() { return portfolio; } public Stock getStock() { return stock; } public Type getTransactionType() { return transactionType; } public BigDecimal getQuantity() { return quantity; } public BigDecimal getPrice() { return price; } public Instant getTransactionDate() { return transactionDate; } public Instant getCreatedAt() { return createdAt; }
+    public UUID getId() { return id; } public Portfolio getPortfolio() { return portfolio; } public Stock getStock() { return stock; } public Type getTransactionType() { return transactionType; } public BigDecimal getQuantity() { return quantity; } public BigDecimal getPrice() { return price; } public Instant getTransactionDate() { return transactionDate; } public Instant getCreatedAt() { return createdAt; } public String getIdempotencyKey() { return idempotencyKey; }
 }

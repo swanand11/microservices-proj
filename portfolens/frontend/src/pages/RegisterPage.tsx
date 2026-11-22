@@ -20,7 +20,7 @@ export function RegisterPage() {
     if (password !== confirm) { setError('Passwords do not match.'); return }
     if (password.length < 8) { setError('Use at least 8 characters for your password.'); return }
     setBusy(true)
-    try { await register(fullName, email, password); navigate('/dashboard', { replace: true }) }
+    try { await register(fullName.trim(), email.trim().toLowerCase(), password); navigate('/dashboard', { replace: true }) }
     catch (err) { setError(axios.isAxiosError<ApiErrorBody>(err) ? err.response?.data.message || 'Could not reach the server. Please try again.' : 'Registration failed.') }
     finally { setBusy(false) }
   }

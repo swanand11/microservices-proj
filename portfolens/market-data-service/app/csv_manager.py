@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import pandas as pd
-from app.config import HISTORY_DIR
+from .config import HISTORY_DIR
 
 PRICE_COLUMNS = ["date", "open", "high", "low", "close", "adjusted_close", "volume"]
 
@@ -17,8 +17,8 @@ def clean_history(frame: pd.DataFrame) -> pd.DataFrame:
         result = result.rename(columns={"Adj Close": "adjusted_close"})
     if "Adj Close" in result.columns:
         result = result.drop(columns=["Adj Close"])
-    result.index.name = "date"
     if "date" not in result.columns:
+        result.index.name = "date"
         result = result.reset_index()
     rename = {"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
     result = result.rename(columns=rename)
@@ -53,10 +53,23 @@ def save_history(symbol: str, frame: pd.DataFrame, source: str = "Yahoo Finance"
     temp.replace(path)
     metadata = {"source": source, "downloaded_at": datetime.now(timezone.utc).isoformat(), "price_policy": "auto_adjust=False; raw OHLC/Close and Yahoo Adj Close kept separately"}
     path.with_suffix(".metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    try:
+        from .pg_store import save_history as save_postgres_history
+        save_postgres_history(symbol, cleaned, source)
+    except Exception:
+        # CSV remains the local cache if the optional shared database is not reachable.
+        pass
     return path, len(cleaned)
 
 
 def load_history(symbol: str) -> tuple[pd.DataFrame, dict]:
+    try:
+        from .pg_store import load_history as load_postgres_history
+        database_result = load_postgres_history(symbol)
+        if database_result is not None:
+            return database_result
+    except Exception:
+        pass
     path = history_path(symbol)
     if not path.exists():
         return pd.DataFrame(columns=PRICE_COLUMNS), {}

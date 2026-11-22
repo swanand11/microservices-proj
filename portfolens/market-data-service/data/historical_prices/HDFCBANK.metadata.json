@@ -1,0 +1,6 @@
+{
+  "source": "Synthetic demo data",
+  "downloaded_at": "2026-11-22T14:42:20.996566+00:00",
+  "price_policy": "Generated deterministic demo series; not actual market observations. Returns loosely follow historical Sensex changes with seeded daily variation.",
+  "synthetic": true
+}

@@ -1,9 +1,9 @@
 from datetime import date
 import time
 import yfinance as yf
-from app.config import DEFAULT_INTERVAL, DEFAULT_PERIOD, REQUEST_DELAY_SECONDS
-from app.csv_manager import load_history, save_history
-from app.stock_master import Stock
+from .config import DEFAULT_INTERVAL, DEFAULT_PERIOD, REQUEST_DELAY_SECONDS
+from .csv_manager import load_history, save_history
+from .stock_master import Stock
 
 
 def fetch_ticker_history(yahoo_ticker: str, period: str = DEFAULT_PERIOD):

@@ -1,6 +1,6 @@
-# PortfoLens — Phase 1
+# PortfoLens — BSE Portfolio Analytics
 
-PortfoLens is a BSE portfolio analytics application in its first phase: a modular monolith foundation with account registration, login, JWT authentication, and a small authenticated profile/dashboard experience. Portfolio management, market data, calculations, and recommendations are intentionally out of scope.
+PortfoLens is a BSE portfolio application with JWT-authenticated portfolio management, historical market data, and a separate asynchronous analytics service.
 
 ## Project structure
 
@@ -8,14 +8,18 @@ PortfoLens is a BSE portfolio analytics application in its first phase: a modula
 portfolens/
 ├── backend/     Spring Boot 3 / Java 21 API
 ├── frontend/    React / TypeScript / Vite application
+├── analytics-service/ Java 21 / Spring Boot RabbitMQ subscriber
+├── market-data-service/ Python / FastAPI and Yahoo Finance history
 └── README.md
 ```
 
 ## Architecture
 
-The backend is one Spring Boot application with controller → service → repository layers. DTOs separate the API contract from persistence. The `security` package owns JWT token creation and request authentication; the `entity` package contains the JPA `User`. Keeping auth logic grouped makes a future service extraction possible without introducing microservices or a gateway in Phase 1.
+The Spring backend is the single client-facing API gateway. It owns authentication and portfolio operations, and applies bearer JWT authentication to every route except registration and login. It retains synchronous HTTP communication with the market-data service. Portfolio buys and sells write the transaction, update holdings, and insert a RabbitMQ outbox event in one PostgreSQL transaction. The outbox publisher sends confirmed events to the Analytics service, which deduplicates transactions and owns its analytics tables.
 
-The frontend is an independent Vite app. Its auth context keeps the current user and access token in memory, Axios adds the bearer token, and React Router protects dashboard/profile routes.
+The project uses one Supabase PostgreSQL instance for course-project practicality. The core group owns the account/portfolio tables and its `historical_prices` read cache; Market Data owns `market_data_prices`; Analytics owns `analytics_transaction_events` and `portfolio_analytics`. These are service-owned table groups in one shared database, not isolated per-service database instances.
+
+The frontend is an independent Vite app. Its auth context restores the current user and access token from tab-scoped session storage, Axios adds the bearer token, and React Router protects workspace routes.
 
 ## Requirements
 
@@ -52,9 +56,18 @@ Backend variables:
 | `JWT_SECRET` | Base64 encoded random signing key, minimum 32 decoded bytes |
 | `JWT_EXPIRATION_MS` | JWT lifetime in milliseconds; default 900000 (15 minutes) |
 | `APP_CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins; default `http://localhost:5173` |
-| `SERVER_PORT` | Optional API port; default 8080 |
+| `SERVER_PORT` | Optional API port; default 8000 |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` | RabbitMQ connection; defaults to local guest credentials |
+| `OUTBOX_POLL_MS` | Outbox publisher interval in milliseconds; default 1000 |
+| `ANALYTICS_SERVICE_URL` | Internal analytics API URL; default `http://localhost:8002` |
+| `ANALYTICS_SERVICE_KEY` | Shared backend-to-analytics key; configure the same value in both services |
+| `MARKET_DATA_SERVICE_URL` | Market-data service URL; default `http://localhost:8001` |
+| `MARKET_DATA_SERVICE_KEY` | Shared internal key required by FastAPI for non-health routes; configure in all three services |
+| `SENSEX_YAHOO_TICKER` | Yahoo Finance equity benchmark ticker; default `^BSESN` |
+| `RBI_WSS_CACHE_HOURS` | How long the market-data service caches RBI weekly G-Sec observations; default `168` |
+| `ANALYTICS_RISK_FREE_ANNUAL_RATE`, `MARKET_RISK_FREE_ANNUAL_RATE` | Optional annual-rate fallback (decimal, e.g. `0.07`, or percent, e.g. `7`) |
 
-Frontend variable: `VITE_API_BASE_URL`, the API origin (default `http://localhost:8080`). Vite variables are public and must not contain secrets.
+Frontend variable: `VITE_API_BASE_URL`, the API origin (default `http://localhost:8000`). Vite variables are public and must not contain secrets.
 
 For quick shell setup, export values before `mvn spring-boot:run`, for example:
 
@@ -82,7 +95,16 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (normally `http://localhost:5173`). The API listens on port 8080. Hibernate schema update is enabled for this student development foundation; use reviewed database migrations before production and avoid automatic schema changes against important data.
+Open the URL Vite prints (normally `http://localhost:5173`). The API listens on port 8000. Hibernate schema update is enabled for this student development foundation; use reviewed database migrations before production and avoid automatic schema changes against important data.
+
+Start RabbitMQ locally from the project root with `docker compose up -d rabbitmq`. Run the Analytics service in another terminal with the same database, RabbitMQ, and `ANALYTICS_SERVICE_KEY` environment values:
+
+```sh
+cd analytics-service
+mvn spring-boot:run
+```
+
+The Analytics service listens on port 8002. Its internal portfolio endpoint requires `X-Internal-Service-Key`; browser requests go through the Spring gateway at `/api/analytics/portfolios/{id}`, which verifies JWT authentication and portfolio ownership.
 
 ## API
 
@@ -118,9 +140,9 @@ Example protected request header: `Authorization: Bearer <accessToken>`. A missi
 - `/login` and `/register` are public.
 - `/dashboard` and `/profile` require authentication; unauthenticated visitors go to login.
 - Successful login and registration go to the dashboard. The dashboard contains placeholders only.
-- Logout clears the in-memory token and user.
+- Logout clears the tab-scoped token and user.
 
-## Historical market data (Phase 3)
+## Historical market data
 
 The separate `market-data-service/` Python application downloads daily historical BSE prices from Yahoo Finance, retains CSV files locally, and exposes a FastAPI API. Its checked-in stock master contains candidate `.BO` tickers for the initial sample universe; verify mappings using `python scripts/download_history.py --validate` before relying on availability. The collector keeps unadjusted OHLC/close separate from Yahoo's adjusted close (`auto_adjust=False`). It does not fill missing trading days or fabricate unavailable prices.
 
@@ -128,9 +150,17 @@ Start the Python service from `market-data-service/` with `uvicorn app.main:app 
 
 To import prices, configure a private `MARKET_SYNC_KEY` in the backend environment and send it as `X-Market-Sync-Key` when calling `POST /api/market/sync/{symbol}` or `/api/market/sync/bulk`. Sync is disabled when the key is unset. Do not put this operator key in frontend code. Hibernate creates the `historical_prices` table in the configured database schema on startup.
 
+The market-data service also serves Sensex history and the weekly 10-year G-Sec par yield at `/api/market/series/sensex/history` and `/api/market/series/gsec10y/history`. Sensex comes from Yahoo Finance; G-Sec comes from RBI's public Weekly Statistical Supplement (the "10-Year G-Sec Par Yield (FBIL)" row). The service stores observations in the shared `market_data_series` table and its local CSV cache, refreshing the RBI source every seven days by default. The latest available weekly observation is used as the annual risk-free rate. Set `MARKET_RISK_FREE_ANNUAL_RATE` only as a fallback for periods when the RBI source and cache are unavailable.
+
+The Analytics service computes annualized covariance, beta, Jensen alpha, and Sharpe ratio from aligned daily portfolio and Sensex returns. It requires at least 30 aligned observations; otherwise it reports insufficient history. The portfolio page displays the returned metrics.
+
+For a local demonstration without depending on ticker-download availability, run `python market-data-service/scripts/seed_synthetic_demo.py` to generate labelled synthetic INFY, TCS, and HDFCBANK histories, then `python scripts/sync_demo_prices.py` to bulk-import those rows into the backend's `historical_prices` cache using the credentials in `backend/.env`. Finally set `PORTFOLENS_DEMO_PASSWORD` and run `python scripts/seed_demo_portfolio.py`; it creates a dedicated `demo@portfolens.test` account and synthetic portfolio, records dated transactions, and checks analytics status. Synthetic prices are explicitly labelled in the Market Explorer and must not be presented as real market observations or used for investment decisions.
+
+Every buy/sell request must include an `Idempotency-Key`. The UI reuses the key when retrying the same trade, so the backend returns the original transaction rather than applying it twice. Direct holding-mutation routes are not exposed; position changes use buy/sell transactions so Analytics receives the full event stream.
+
 ## Token storage and security notes
 
-This first implementation returns a short-lived bearer JWT and stores it only in JavaScript memory. This avoids persistent token exposure through `localStorage`, but refreshing or closing the tab clears the session and requires another login. An XSS vulnerability can still access any token available to page JavaScript, so memory storage is not a complete production solution.
+The API returns a short-lived bearer JWT. The frontend keeps it in `sessionStorage` so refreshing a tab preserves the session; closing the tab clears it. The app reloads the profile on startup and clears the stored session after an unauthorized response. JavaScript can access session storage, so an XSS vulnerability can access the token; use a hardened content security policy and consider an HttpOnly cookie session before production deployment.
 
 For a production browser session, prefer a Secure, HttpOnly, SameSite cookie and explicitly design CSRF protection, cookie lifetime/refresh, CORS, and logout invalidation. Do not simply move the bearer token into a cookie while leaving CSRF disabled. The current stateless bearer setup disables CSRF because credentials are sent explicitly in the Authorization header.
 

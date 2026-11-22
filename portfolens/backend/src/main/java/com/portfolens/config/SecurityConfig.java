@@ -34,7 +34,7 @@ public class SecurityConfig {
     }
     @Bean CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins}") String origins) {
         CorsConfiguration config = new CorsConfiguration(); config.setAllowedOrigins(java.util.Arrays.stream(origins.split(",")).map(String::trim).toList());
-        config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); config.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "X-Market-Sync-Key")); config.setAllowCredentials(false);
+        config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); config.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "X-Market-Sync-Key", "Idempotency-Key")); config.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource(); source.registerCorsConfiguration("/**", config); return source;
     }
     @Bean SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwt, ObjectMapper mapper) throws Exception {

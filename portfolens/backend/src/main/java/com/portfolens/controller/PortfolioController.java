@@ -22,9 +22,6 @@ public class PortfolioController {
     @GetMapping("/stocks") public List<StockResponse> stocks(@RequestParam(required=false) String q,@RequestParam(required=false) String sector) { return service.searchStocks(q,sector); }
     @GetMapping("/stocks/{id}") public StockResponse stock(@PathVariable UUID id) { return service.getStock(id); }
     @GetMapping("/portfolios/{id}/holdings") public List<HoldingResponse> holdings(@PathVariable UUID id,Authentication a) { return service.listHoldings(id,a.getName()); }
-    @PostMapping("/portfolios/{id}/holdings") @ResponseStatus(HttpStatus.CREATED) public HoldingResponse addHolding(@PathVariable UUID id,Authentication a,@Valid @RequestBody HoldingRequest r) { return service.addHolding(id,a.getName(),r); }
-    @PutMapping("/portfolios/{id}/holdings/{holdingId}") public HoldingResponse updateHolding(@PathVariable UUID id,@PathVariable UUID holdingId,Authentication a,@Valid @RequestBody HoldingRequest r) { return service.updateHolding(id,holdingId,a.getName(),r); }
-    @DeleteMapping("/portfolios/{id}/holdings/{holdingId}") @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteHolding(@PathVariable UUID id,@PathVariable UUID holdingId,Authentication a) { service.deleteHolding(id,holdingId,a.getName()); }
     @GetMapping("/portfolios/{id}/transactions") public List<TransactionResponse> transactions(@PathVariable UUID id,Authentication a) { return service.listTransactions(id,a.getName()); }
-    @PostMapping("/portfolios/{id}/transactions") @ResponseStatus(HttpStatus.CREATED) public TransactionResponse record(@PathVariable UUID id,Authentication a,@Valid @RequestBody TransactionRequest r) { return service.recordTransaction(id,a.getName(),r); }
+    @PostMapping("/portfolios/{id}/transactions") @ResponseStatus(HttpStatus.CREATED) public TransactionResponse record(@PathVariable UUID id,Authentication a,@RequestHeader("Idempotency-Key") String idempotencyKey,@Valid @RequestBody TransactionRequest r) { return service.recordTransaction(id,a.getName(),r,idempotencyKey); }
 }

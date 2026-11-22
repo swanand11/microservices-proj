@@ -44,6 +44,8 @@ public class DatabaseUrlConfiguration {
         dataSource.setUsername(firstNonBlank(configuredUsername, parsed.username()));
         dataSource.setPassword(firstNonBlank(configuredPassword, parsed.password()));
         dataSource.setDriverClassName("org.postgresql.Driver");
+        dataSource.setMaximumPoolSize(3);
+        dataSource.setMinimumIdle(1);
         return dataSource;
     }
 

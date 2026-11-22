@@ -45,3 +45,16 @@ class DownloadRequest(BaseModel):
 
 class BulkDownloadRequest(DownloadRequest):
     symbols: list[str] = Field(default_factory=list, max_length=50)
+
+
+class SeriesRecord(BaseModel):
+    date: date
+    value: float
+
+
+class SeriesHistoryOut(BaseModel):
+    series: str
+    yahoo_ticker: str | None
+    source: str
+    last_updated: datetime | None
+    records: list[SeriesRecord] = Field(default_factory=list)

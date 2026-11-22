@@ -16,6 +16,13 @@ spring:
         jdbc:
           time_zone: UTC
         default_schema: ${DB_SCHEMA:public}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
 server:
   port: ${SERVER_PORT:8000}
 app:
@@ -27,3 +34,11 @@ app:
   market-data:
     base-url: ${MARKET_DATA_SERVICE_URL:http://localhost:8001}
     sync-key: ${MARKET_SYNC_KEY:}
+    service-key: ${MARKET_DATA_SERVICE_KEY:}
+  messaging:
+    exchange: ${RABBITMQ_EXCHANGE:portfolens.events}
+    transaction-routing-key: ${RABBITMQ_TRANSACTION_ROUTING_KEY:portfolio.transaction.recorded}
+    outbox-poll-ms: ${OUTBOX_POLL_MS:1000}
+  analytics:
+    base-url: ${ANALYTICS_SERVICE_URL:http://localhost:8002}
+    service-key: ${ANALYTICS_SERVICE_KEY:}

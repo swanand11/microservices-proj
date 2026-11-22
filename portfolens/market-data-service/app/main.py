@@ -1,5 +1,14 @@
 from fastapi import FastAPI
-from app.routes import router
+
+if __package__:
+    from .routes import protected_router, router
+else:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from app.routes import protected_router, router
 
 app = FastAPI(title="PortfoLens Market Data", version="1.0.0", description="Historical BSE market data sourced from Yahoo Finance. Not a real-time feed.")
 app.include_router(router)
+app.include_router(protected_router)
