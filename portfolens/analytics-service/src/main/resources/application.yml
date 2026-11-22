@@ -22,6 +22,26 @@ spring:
     password: ${RABBITMQ_PASSWORD:guest}
 server:
   port: ${ANALYTICS_SERVER_PORT:8002}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState
+        liveness:
+          include: livenessState
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
 app:
   rabbitmq:
     exchange: ${RABBITMQ_EXCHANGE:portfolens.events}
