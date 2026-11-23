@@ -12,6 +12,10 @@
 **/.env
 **/.env.*.local
 !.env.example
+.env.compose
+
+# Populated Kubernetes credentials (keep only the placeholder template tracked)
+k8s/secrets.yaml
 
 # IDE and OS files
 .idea/

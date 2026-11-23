@@ -1,0 +1,8 @@
+__pycache__/
+.pytest_cache/
+.venv/
+data/historical_prices/
+data/market_series/
+tests/
+scripts/
+*.pyc

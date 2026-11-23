@@ -1,3 +1,9 @@
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Match the Spring services' local .env behavior for direct development runs.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+
 from fastapi import FastAPI
 
 if __package__:

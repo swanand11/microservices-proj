@@ -1,15 +1,159 @@
+name: portfolens
+
 services:
   rabbitmq:
     image: rabbitmq:3.13-management
-    hostname: portfolens-rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    networks: [messaging]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  market-data:
+    image: portfolens-market-data:local
+    build: ./market-data-service
+    environment:
+      MARKET_DATA_SERVICE_KEY: ${MARKET_DATA_SERVICE_KEY:?Set MARKET_DATA_SERVICE_KEY}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Supabase JDBC URL in .env.compose}
+      MARKET_DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Supabase JDBC URL in .env.compose}
+      DB_USER: ${DB_USER:?Set DB_USER to the Supabase database user}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.compose}
+      MARKET_DATA_DIR: /data
+      PORTFOLENS_STOCKS_FILE: /app/data/stocks.csv
+      SENSEX_YAHOO_TICKER: ${SENSEX_YAHOO_TICKER:-^BSESN}
+    volumes: [market-data-cache:/data]
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/market/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  api-gateway:
+    image: portfolens-gateway:local
+    build: ./backend
+    environment:
+      SERVER_PORT: "8000"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Supabase JDBC URL in .env.compose}
+      DB_USER: ${DB_USER:?Set DB_USER to the Supabase database user}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.compose}
+      DB_SCHEMA: public
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-2}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-1}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-30000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-300000}
+      DB_POOL_MAX_LIFETIME_MS: ${DB_POOL_MAX_LIFETIME_MS:-1200000}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      MARKET_DATA_SERVICE_URL: http://market-data:8001
+      MARKET_DATA_SERVICE_KEY: ${MARKET_DATA_SERVICE_KEY:?Set MARKET_DATA_SERVICE_KEY}
+      ANALYTICS_SERVICE_URL: http://analytics:8002
+      ANALYTICS_SERVICE_KEY: ${ANALYTICS_SERVICE_KEY:?Set ANALYTICS_SERVICE_KEY}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=65.0 -XX:InitialRAMPercentage=20.0
+    ports: ["${GATEWAY_HOST_PORT:-8000}:8000"]
+    networks: [app, messaging]
+    depends_on:
+      market-data: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -q -O - http://127.0.0.1:8000/actuator/health/readiness >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+
+  analytics:
+    image: portfolens-analytics:local
+    build: ./analytics-service
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Supabase JDBC URL in .env.compose}
+      DB_USER: ${DB_USER:?Set DB_USER to the Supabase database user}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.compose}
+      DB_SCHEMA: public
+      ANALYTICS_DB_SCHEMA: public
+      ANALYTICS_DB_POOL_MAX_SIZE: ${ANALYTICS_DB_POOL_MAX_SIZE:-2}
+      ANALYTICS_DB_POOL_MIN_IDLE: ${ANALYTICS_DB_POOL_MIN_IDLE:-1}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-30000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-300000}
+      DB_POOL_MAX_LIFETIME_MS: ${DB_POOL_MAX_LIFETIME_MS:-1200000}
+      ANALYTICS_SERVICE_KEY: ${ANALYTICS_SERVICE_KEY:?Set ANALYTICS_SERVICE_KEY}
+      MARKET_DATA_SERVICE_URL: http://market-data:8001
+      MARKET_DATA_SERVICE_KEY: ${MARKET_DATA_SERVICE_KEY:?Set MARKET_DATA_SERVICE_KEY}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+    networks: [app, messaging]
+    depends_on:
+      market-data: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8002/actuator/health/readiness >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+
+  workflow-coordinator:
+    image: portfolens-workflow-coordinator:local
+    build: ./workflow-coordinator-service
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Supabase JDBC URL in .env.compose}
+      DB_USER: ${DB_USER:?Set DB_USER to the Supabase database user}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.compose}
+      WORKFLOW_DB_SCHEMA: workflow
+      WORKFLOW_DB_POOL_MAX_SIZE: ${WORKFLOW_DB_POOL_MAX_SIZE:-2}
+      WORKFLOW_DB_POOL_MIN_IDLE: ${WORKFLOW_DB_POOL_MIN_IDLE:-1}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-30000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-300000}
+      DB_POOL_MAX_LIFETIME_MS: ${DB_POOL_MAX_LIFETIME_MS:-1200000}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      PORTFOLIO_SERVICE_URL: http://api-gateway:8000
+      SAGA_RECOVERY_INTERVAL: ${SAGA_RECOVERY_INTERVAL:-5000ms}
+      SAGA_LEASE_DURATION: ${SAGA_LEASE_DURATION:-30s}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+    ports: ["${WORKFLOW_PORT:-8003}:8003"]
+    networks: [app]
+    depends_on:
+      api-gateway: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8003/actuator/health/readiness >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+
+  frontend:
+    image: portfolens-frontend:local
+    build: ./frontend
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-/}
+    ports: ["${FRONTEND_PORT:-8080}:8080"]
+    networks: [app]
+    depends_on:
+      api-gateway: { condition: service_healthy }
+      workflow-coordinator: { condition: service_healthy }
+    restart: unless-stopped
+
+networks:
+  app: {}
+  messaging: { internal: true }
 
 volumes:
-  rabbitmq-data:
+  market-data-cache: {}
+  rabbitmq-data: {}

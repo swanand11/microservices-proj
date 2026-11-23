@@ -39,7 +39,28 @@ public class AnalyticsDatabaseConfiguration {
         source.setUsername(username);
         source.setPassword(password);
         source.setDriverClassName("org.postgresql.Driver");
+        source.setMaximumPoolSize(poolInt("ANALYTICS_DB_POOL_MAX_SIZE", 2));
+        source.setMinimumIdle(poolInt("ANALYTICS_DB_POOL_MIN_IDLE", 1));
+        source.setConnectionTimeout(poolLong("DB_POOL_CONNECTION_TIMEOUT_MS", 30_000));
+        source.setIdleTimeout(poolLong("DB_POOL_IDLE_TIMEOUT_MS", 300_000));
+        source.setMaxLifetime(poolLong("DB_POOL_MAX_LIFETIME_MS", 1_200_000));
         return source;
+    }
+
+    private static int poolInt(String name, int fallback) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) return fallback;
+        int parsed = Integer.parseInt(value);
+        if (parsed < 1) throw new IllegalArgumentException(name + " must be at least 1");
+        return parsed;
+    }
+
+    private static long poolLong(String name, long fallback) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) return fallback;
+        long parsed = Long.parseLong(value);
+        if (parsed < 1) throw new IllegalArgumentException(name + " must be at least 1");
+        return parsed;
     }
 
     private static String hostPart(URI uri) {

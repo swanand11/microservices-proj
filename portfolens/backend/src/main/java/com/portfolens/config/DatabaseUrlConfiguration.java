@@ -44,9 +44,28 @@ public class DatabaseUrlConfiguration {
         dataSource.setUsername(firstNonBlank(configuredUsername, parsed.username()));
         dataSource.setPassword(firstNonBlank(configuredPassword, parsed.password()));
         dataSource.setDriverClassName("org.postgresql.Driver");
-        dataSource.setMaximumPoolSize(3);
-        dataSource.setMinimumIdle(1);
+        dataSource.setMaximumPoolSize(positiveInt("DB_POOL_MAX_SIZE", 2));
+        dataSource.setMinimumIdle(positiveInt("DB_POOL_MIN_IDLE", 1));
+        dataSource.setConnectionTimeout(positiveLong("DB_POOL_CONNECTION_TIMEOUT_MS", 30_000));
+        dataSource.setIdleTimeout(positiveLong("DB_POOL_IDLE_TIMEOUT_MS", 300_000));
+        dataSource.setMaxLifetime(positiveLong("DB_POOL_MAX_LIFETIME_MS", 1_200_000));
         return dataSource;
+    }
+
+    private int positiveInt(String name, int fallback) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) return fallback;
+        int parsed = Integer.parseInt(value);
+        if (parsed < 1) throw new IllegalArgumentException(name + " must be at least 1");
+        return parsed;
+    }
+
+    private long positiveLong(String name, long fallback) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) return fallback;
+        long parsed = Long.parseLong(value);
+        if (parsed < 1) throw new IllegalArgumentException(name + " must be at least 1");
+        return parsed;
     }
 
     private ParsedConnection parseConnection() {

@@ -1,167 +1,119 @@
-# PortfoLens — BSE Portfolio Analytics
+# PortfoLens demo runbook
 
-PortfoLens is a BSE portfolio application with JWT-authenticated portfolio management, historical market data, and a separate asynchronous analytics service.
+Start the full app with Docker Compose, or build and run it in Minikube. Both options start the frontend, API gateway, market-data service, Analytics, Workflow Coordinator, and the services they need.
 
-## Project structure
+## Before the demo
 
-```text
-portfolens/
-├── backend/     Spring Boot 3 / Java 21 API
-├── frontend/    React / TypeScript / Vite application
-├── analytics-service/ Java 21 / Spring Boot RabbitMQ subscriber
-├── market-data-service/ Python / FastAPI and Yahoo Finance history
-└── README.md
-```
+You need Docker with Compose v2 and a Supabase PostgreSQL database. The app stores its account and portfolio data there; the database is not started by these instructions. Use a development database and keep its credentials private.
 
-## Architecture
-
-The Spring backend is the single client-facing API gateway. It owns authentication and portfolio operations, and applies bearer JWT authentication to every route except registration and login. It retains synchronous HTTP communication with the market-data service. Portfolio buys and sells write the transaction, update holdings, and insert a RabbitMQ outbox event in one PostgreSQL transaction. The outbox publisher sends confirmed events to the Analytics service, which deduplicates transactions and owns its analytics tables.
-
-The project uses one Supabase PostgreSQL instance for course-project practicality. The core group owns the account/portfolio tables and its `historical_prices` read cache; Market Data owns `market_data_prices`; Analytics owns `analytics_transaction_events` and `portfolio_analytics`. These are service-owned table groups in one shared database, not isolated per-service database instances.
-
-The frontend is an independent Vite app. Its auth context restores the current user and access token from tab-scoped session storage, Axios adds the bearer token, and React Router protects workspace routes.
-
-## Requirements
-
-- Java 21 and Maven 3.9+
-- Node.js 20+ and npm
-- Supabase project with PostgreSQL enabled
-
-## Supabase and environment setup
-
-In Supabase, open **Project Settings → Database → Connection string** and use the PostgreSQL URI/connection values. Prefer the session pooler URI when your network or runtime needs IPv4 compatibility. Require SSL (`sslmode=require`). Do not put a real database password or JWT signing key in Git.
-
-Create local environment values from the examples:
+From this directory, create the local Compose settings without overwriting an existing file:
 
 ```sh
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+test -f .env.compose || cp .env.compose.example .env.compose
 ```
 
-The backend loads `backend/.env` through the `spring-dotenv` dependency when started from the backend project directory. Values supplied by the operating system take precedence. Replace placeholders with values from Supabase. Generate a Base64 JWT key at least 32 bytes long, for example:
+Edit `.env.compose` and set `DATABASE_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `MARKET_DATA_SERVICE_KEY`, and `ANALYTICS_SERVICE_KEY`. Use the Supabase JDBC URL with `sslmode=require`. Generate a JWT key and separate internal service keys with:
 
 ```sh
 openssl rand -base64 32
 ```
 
-Backend variables:
+The example uses frontend port `8081` and gateway port `8000`. Compose starts RabbitMQ for the application services.
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Complete JDBC URL, e.g. `jdbc:postgresql://<host>:5432/postgres?sslmode=require`. If the supplied value is a `postgres://` URI, set `DATABASE_URL_JDBC` to its equivalent JDBC URL. |
-| `host`, `port`, `database` | Existing Supabase connection parts used to construct a JDBC URL when `DATABASE_URL` is unset. |
-| `user` | Supabase database username |
-| `DB_PASSWORD` | Supabase database password. Add this locally if it is not already in `.env`; never commit the value. |
-| `DB_SCHEMA` | Hibernate schema, defaults to `app`; the database role must have access to it. |
-| `JWT_SECRET` | Base64 encoded random signing key, minimum 32 decoded bytes |
-| `JWT_EXPIRATION_MS` | JWT lifetime in milliseconds; default 900000 (15 minutes) |
-| `APP_CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins; default `http://localhost:5173` |
-| `SERVER_PORT` | Optional API port; default 8000 |
-| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` | RabbitMQ connection; defaults to local guest credentials |
-| `OUTBOX_POLL_MS` | Outbox publisher interval in milliseconds; default 1000 |
-| `ANALYTICS_SERVICE_URL` | Internal analytics API URL; default `http://localhost:8002` |
-| `ANALYTICS_SERVICE_KEY` | Shared backend-to-analytics key; configure the same value in both services |
-| `MARKET_DATA_SERVICE_URL` | Market-data service URL; default `http://localhost:8001` |
-| `MARKET_DATA_SERVICE_KEY` | Shared internal key required by FastAPI for non-health routes; configure in all three services |
-| `SENSEX_YAHOO_TICKER` | Yahoo Finance equity benchmark ticker; default `^BSESN` |
-| `RBI_WSS_CACHE_HOURS` | How long the market-data service caches RBI weekly G-Sec observations; default `168` |
-| `ANALYTICS_RISK_FREE_ANNUAL_RATE`, `MARKET_RISK_FREE_ANNUAL_RATE` | Optional annual-rate fallback (decimal, e.g. `0.07`, or percent, e.g. `7`) |
+## Option A: Docker Compose
 
-Frontend variable: `VITE_API_BASE_URL`, the API origin (default `http://localhost:8000`). Vite variables are public and must not contain secrets.
-
-For quick shell setup, export values before `mvn spring-boot:run`, for example:
+Start all containers in the background:
 
 ```sh
-export DATABASE_URL='jdbc:postgresql://<host>:5432/postgres?sslmode=require'
-export user='<username>' DB_PASSWORD='<password>'
-export JWT_SECRET="$(openssl rand -base64 32)"
-export JWT_EXPIRATION_MS=900000 APP_CORS_ALLOWED_ORIGINS=http://localhost:5173
+docker compose --env-file .env.compose up -d --build
 ```
 
-## Run locally
-
-Start the API after setting its environment variables:
+Wait for startup and inspect status:
 
 ```sh
-cd backend
-mvn spring-boot:run
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose logs --tail=100
 ```
 
-In another terminal:
+Open **http://localhost:8081**. Register an account, sign in, create a portfolio, explore market history, record a buy or sell, then review portfolio analytics. Browser API calls use the frontend’s same-origin proxy; the browser does not need Kubernetes or container DNS names.
+
+Check the frontend, gateway, and coordinator:
 
 ```sh
-cd frontend
-npm install
-npm run dev
+curl -fsS http://localhost:8081/healthz
+curl -fsS http://localhost:8000/actuator/health/readiness
+curl -fsS http://localhost:8003/actuator/health/readiness
 ```
 
-Open the URL Vite prints (normally `http://localhost:5173`). The API listens on port 8000. Hibernate schema update is enabled for this student development foundation; use reviewed database migrations before production and avoid automatic schema changes against important data.
+If a service fails to start, inspect its logs, for example `docker compose --env-file .env.compose logs --tail=200 workflow-coordinator`.
 
-Start RabbitMQ locally from the project root with `docker compose up -d rabbitmq`. Run the Analytics service in another terminal with the same database, RabbitMQ, and `ANALYTICS_SERVICE_KEY` environment values:
+Stop the app and keep its data volumes:
 
 ```sh
-cd analytics-service
-mvn spring-boot:run
+docker compose --env-file .env.compose down
 ```
 
-The Analytics service listens on port 8002. Its internal portfolio endpoint requires `X-Internal-Service-Key`; browser requests go through the Spring gateway at `/api/analytics/portfolios/{id}`, which verifies JWT authentication and portfolio ownership.
+## Option B: Kubernetes with Minikube
 
-## API
+You need Docker, `kubectl`, and Minikube. The Kubernetes manifests use locally built images and require a PostgreSQL database plus a RabbitMQ broker reachable from inside the cluster. Compose’s `rabbitmq` hostname is only valid inside the Compose network.
 
-All JSON endpoints use UTF-8 JSON. Validation failures and application errors follow this format:
+Create the cluster and load the app images:
 
-```json
-{
-  "timestamp": "2025-01-01T00:00:00Z",
-  "status": 400,
-  "code": "VALIDATION_ERROR",
-  "message": "Request validation failed",
-  "fieldErrors": { "email": "must be a well-formed email address" }
-}
+```sh
+./deploy/scripts/setup-minikube.sh
 ```
 
-| Method and path | Auth | Purpose |
-|---|---|---|
-| `POST /api/auth/register` | Public | Create a user; `fullName`, `email`, `password` (min 8 chars). Returns profile only, HTTP 201. |
-| `POST /api/auth/login` | Public | Verify credentials. Returns `accessToken`, `tokenType`, `expiresInSeconds`, and safe user profile. |
-| `GET /api/users/me` | Bearer JWT | Return authenticated user profile. |
-| `PUT /api/users/me` | Bearer JWT | Update `fullName`; returns the safe profile. |
+Prepare the Kubernetes Secret without replacing an existing one:
 
-Example login request:
-
-```json
-{ "email": "student@example.com", "password": "example-password" }
+```sh
+test -f k8s/secrets.yaml || cp k8s/secrets.example.yaml k8s/secrets.yaml
 ```
 
-Example protected request header: `Authorization: Bearer <accessToken>`. A missing or invalid token returns HTTP 401 with `UNAUTHORIZED`; incorrect credentials return `INVALID_CREDENTIALS`. Password hashes are never included in API responses.
+Edit `k8s/secrets.yaml` with your PostgreSQL connection and password, JWT and service keys, and cluster-reachable RabbitMQ host and credentials. Then apply it and deploy the manifests:
 
-## Frontend routes
+```sh
+kubectl apply -f k8s/secrets.yaml
+./deploy/scripts/deploy-k8s.sh
+```
 
-- `/login` and `/register` are public.
-- `/dashboard` and `/profile` require authentication; unauthenticated visitors go to login.
-- Successful login and registration go to the dashboard. The dashboard contains placeholders only.
-- Logout clears the tab-scoped token and user.
+Wait for the frontend and gateway, then inspect all pods and service endpoints:
 
-## Historical market data
+```sh
+kubectl rollout status deployment/frontend -n portfolens --timeout=180s
+kubectl rollout status deployment/api-gateway -n portfolens --timeout=180s
+kubectl get pods,svc,endpoints -n portfolens
+```
 
-The separate `market-data-service/` Python application downloads daily historical BSE prices from Yahoo Finance, retains CSV files locally, and exposes a FastAPI API. Its checked-in stock master contains candidate `.BO` tickers for the initial sample universe; verify mappings using `python scripts/download_history.py --validate` before relying on availability. The collector keeps unadjusted OHLC/close separate from Yahoo's adjusted close (`auto_adjust=False`). It does not fill missing trading days or fabricate unavailable prices.
+Forward the frontend Service to an unused local port:
 
-Start the Python service from `market-data-service/` with `uvicorn app.main:app --reload --port 8001`. The Spring backend calls it using `MARKET_DATA_SERVICE_URL` (default `http://localhost:8001`). Authenticated market reads are available through Spring at `/api/market/stocks`, `/api/market/stocks/{symbol}/history`, and `/api/market/stocks/{symbol}/latest`. Open the protected **Market explorer** page to search the sample stock master and chart imported daily closes. Prices are historical and may be delayed.
+```sh
+kubectl port-forward -n portfolens service/frontend 18080:8080
+```
 
-To import prices, configure a private `MARKET_SYNC_KEY` in the backend environment and send it as `X-Market-Sync-Key` when calling `POST /api/market/sync/{symbol}` or `/api/market/sync/bulk`. Sync is disabled when the key is unset. Do not put this operator key in frontend code. Hibernate creates the `historical_prices` table in the configured database schema on startup.
+Keep that terminal open and browse to **http://127.0.0.1:18080**. Use the same demo flow as Compose. The frontend proxies API requests to the internal `api-gateway` and `workflow-coordinator` Kubernetes Services. Only the frontend needs to be opened in the browser.
 
-The market-data service also serves Sensex history and the weekly 10-year G-Sec par yield at `/api/market/series/sensex/history` and `/api/market/series/gsec10y/history`. Sensex comes from Yahoo Finance; G-Sec comes from RBI's public Weekly Statistical Supplement (the "10-Year G-Sec Par Yield (FBIL)" row). The service stores observations in the shared `market_data_series` table and its local CSV cache, refreshing the RBI source every seven days by default. The latest available weekly observation is used as the annual risk-free rate. Set `MARKET_RISK_FREE_ANNUAL_RATE` only as a fallback for periods when the RBI source and cache are unavailable.
+In a second terminal, check frontend access and the gateway through the frontend proxy:
 
-The Analytics service computes annualized covariance, beta, Jensen alpha, and Sharpe ratio from aligned daily portfolio and Sensex returns. It requires at least 30 aligned observations; otherwise it reports insufficient history. The portfolio page displays the returned metrics.
+```sh
+curl -fsS http://127.0.0.1:18080/healthz
+curl -i -X POST http://127.0.0.1:18080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  --data '{"email":"nobody@example.invalid","password":"invalid-password"}'
+```
 
-For a local demonstration without depending on ticker-download availability, run `python market-data-service/scripts/seed_synthetic_demo.py` to generate labelled synthetic INFY, TCS, and HDFCBANK histories, then `python scripts/sync_demo_prices.py` to bulk-import those rows into the backend's `historical_prices` cache using the credentials in `backend/.env`. Finally set `PORTFOLENS_DEMO_PASSWORD` and run `python scripts/seed_demo_portfolio.py`; it creates a dedicated `demo@portfolens.test` account and synthetic portfolio, records dated transactions, and checks analytics status. Synthetic prices are explicitly labelled in the Market Explorer and must not be presented as real market observations or used for investment decisions.
+The login check should return HTTP 401 for the deliberately invalid account; that confirms the request reached the API. The direct gateway Service is cluster-internal. If the frontend port-forward cannot bind, choose another unused local port, such as `18081:8080`, and update the URL accordingly.
 
-Every buy/sell request must include an `Idempotency-Key`. The UI reuses the key when retrying the same trade, so the backend returns the original transaction rather than applying it twice. Direct holding-mutation routes are not exposed; position changes use buy/sell transactions so Analytics receives the full event stream.
+## If something is not ready
 
-## Token storage and security notes
+For Compose, inspect the affected container with `docker compose --env-file .env.compose logs --tail=200 <service>`.
 
-The API returns a short-lived bearer JWT. The frontend keeps it in `sessionStorage` so refreshing a tab preserves the session; closing the tab clears it. The app reloads the profile on startup and clears the stored session after an unauthorized response. JavaScript can access session storage, so an XSS vulnerability can access the token; use a hardened content security policy and consider an HttpOnly cookie session before production deployment.
+For Kubernetes, inspect pod status, events, and logs:
 
-For a production browser session, prefer a Secure, HttpOnly, SameSite cookie and explicitly design CSRF protection, cookie lifetime/refresh, CORS, and logout invalidation. Do not simply move the bearer token into a cookie while leaving CSRF disabled. The current stateless bearer setup disables CSRF because credentials are sent explicitly in the Authorization header.
+```sh
+kubectl get pods -n portfolens
+kubectl get endpoints -n portfolens
+kubectl get events -n portfolens --sort-by=.lastTimestamp
+kubectl logs deployment/workflow-coordinator -n portfolens --all-pods
+```
 
-Additional deployment work before production includes migrations, rate limiting, TLS, secret management/rotation, security review, and an account recovery flow. The frontend currently has no token refresh endpoint.
+An empty Service endpoint list means no ready pod currently matches that Service. Check the pod readiness and logs, then verify the database and (for Kubernetes) RabbitMQ settings.

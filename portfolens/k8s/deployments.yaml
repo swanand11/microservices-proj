@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: api-gateway, namespace: portfolens }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: api-gateway } }
+  template:
+    metadata: { labels: { app: api-gateway } }
+    spec:
+      serviceAccountName: portfolens-app
+      terminationGracePeriodSeconds: 35
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: api-gateway
+          image: portfolens-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: portfolens-config }
+            - secretRef: { name: portfolens-secrets }
+          env:
+            - { name: SERVER_PORT, value: "8000" }
+            - { name: RABBITMQ_PORT, value: "5672" }
+          startupProbe: { httpGet: { path: /actuator/health/liveness, port: http }, periodSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: /actuator/health/liveness, port: http }, periodSeconds: 10, timeoutSeconds: 3, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: /actuator/health/readiness, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
+          resources: { requests: { cpu: 200m, memory: 384Mi }, limits: { cpu: "1", memory: 768Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: market-data-service, namespace: portfolens }
+spec:
+  replicas: 1
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: market-data-service } }
+  template:
+    metadata: { labels: { app: market-data-service } }
+    spec:
+      serviceAccountName: portfolens-app
+      terminationGracePeriodSeconds: 20
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: market-data
+          image: portfolens-market-data:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8001 }]
+          envFrom:
+            - configMapRef: { name: portfolens-config }
+          env:
+            - { name: PORTFOLENS_STOCKS_FILE, value: /app/data/stocks.csv }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: portfolens-secrets, key: DATABASE_URL } } }
+            - { name: MARKET_DATABASE_URL, valueFrom: { secretKeyRef: { name: portfolens-secrets, key: DATABASE_URL } } }
+            - { name: MARKET_DATA_SERVICE_KEY, valueFrom: { secretKeyRef: { name: portfolens-secrets, key: MARKET_DATA_SERVICE_KEY } } }
+          startupProbe: { httpGet: { path: /api/market/health, port: http }, periodSeconds: 5, failureThreshold: 20 }
+          livenessProbe: { httpGet: { path: /api/market/health, port: http }, periodSeconds: 10, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: /api/market/health, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 750m, memory: 768Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: cache, mountPath: /data }]
+      volumes: [{ name: cache, emptyDir: {} }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: analytics-service, namespace: portfolens }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: analytics-service } }
+  template:
+    metadata: { labels: { app: analytics-service } }
+    spec:
+      serviceAccountName: portfolens-app
+      terminationGracePeriodSeconds: 35
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: analytics
+          image: portfolens-analytics:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8002 }]
+          envFrom:
+            - configMapRef: { name: portfolens-config }
+            - secretRef: { name: portfolens-secrets }
+          env: [{ name: ANALYTICS_SERVER_PORT, value: "8002" }]
+          startupProbe: { httpGet: { path: /actuator/health/liveness, port: http }, periodSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: /actuator/health/liveness, port: http }, periodSeconds: 10, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: /actuator/health/readiness, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          resources: { requests: { cpu: 200m, memory: 384Mi }, limits: { cpu: "1", memory: 768Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: workflow-coordinator, namespace: portfolens }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: workflow-coordinator } }
+  template:
+    metadata: { labels: { app: workflow-coordinator } }
+    spec:
+      serviceAccountName: portfolens-app
+      terminationGracePeriodSeconds: 45
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: workflow-coordinator
+          image: portfolens-workflow-coordinator:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8003 }]
+          envFrom:
+            - configMapRef: { name: portfolens-config }
+            - secretRef: { name: portfolens-secrets }
+          env:
+            - { name: WORKFLOW_SERVER_PORT, value: "8003" }
+            # Flyway needs its own temporary connection; keep it outside the one-connection app pool.
+            - name: SPRING_FLYWAY_URL
+              valueFrom: { secretKeyRef: { name: portfolens-secrets, key: DATABASE_URL } }
+            - name: SPRING_FLYWAY_USER
+              valueFrom: { secretKeyRef: { name: portfolens-secrets, key: DB_USER } }
+            - name: SPRING_FLYWAY_PASSWORD
+              valueFrom: { secretKeyRef: { name: portfolens-secrets, key: DB_PASSWORD } }
+          startupProbe: { httpGet: { path: /actuator/health/liveness, port: http }, periodSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: /actuator/health/liveness, port: http }, periodSeconds: 10, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: /actuator/health/readiness, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          resources: { requests: { cpu: 200m, memory: 384Mi }, limits: { cpu: "1", memory: 768Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: frontend, namespace: portfolens }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: frontend } }
+  template:
+    metadata: { labels: { app: frontend } }
+    spec:
+      terminationGracePeriodSeconds: 15
+      securityContext: { runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, fsGroup: 101, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: frontend
+          image: portfolens-frontend:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8080 }]
+          env: [{ name: API_BASE_URL, value: "" }]
+          startupProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 3, failureThreshold: 20 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 128Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: runtime-js, mountPath: /usr/share/nginx/html/runtime-config.js, subPath: runtime-config.js, readOnly: true }
+            - { name: nginx-cache, mountPath: /var/cache/nginx }
+            - { name: nginx-run, mountPath: /var/run }
+      volumes:
+        - name: runtime-js
+          configMap: { name: frontend-runtime, items: [{ key: runtime-config.js, path: runtime-config.js }] }
+        - { name: nginx-cache, emptyDir: {} }
+        - { name: nginx-run, emptyDir: {} }

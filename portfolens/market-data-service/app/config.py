@@ -3,7 +3,7 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("MARKET_DATA_DIR", BASE_DIR / "data"))
-STOCKS_FILE = DATA_DIR / "stocks.csv"
+STOCKS_FILE = Path(os.getenv("PORTFOLENS_STOCKS_FILE", DATA_DIR / "stocks.csv"))
 HISTORY_DIR = DATA_DIR / "historical_prices"
 SERIES_DIR = DATA_DIR / "market_series"
 DEFAULT_PERIOD = "1y"

@@ -1,7 +1,9 @@
 import axios from 'axios'
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  // Default to the current origin so Docker/Nginx can proxy browser requests
+  // through the single frontend endpoint. VITE_API_BASE_URL can override this.
+  baseURL: window.PORTFOLENS_CONFIG?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || '/',
   headers: { 'Content-Type': 'application/json' },
 })
 

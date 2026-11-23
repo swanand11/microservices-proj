@@ -39,7 +39,8 @@ public class SecurityConfig {
     }
     @Bean SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwt, ObjectMapper mapper) throws Exception {
         http.csrf(csrf -> csrf.disable()).cors(cors -> {}).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll().anyRequest().authenticated())
+            .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/info").permitAll().anyRequest().authenticated())
             .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, cause) -> {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 mapper.writeValue(response.getOutputStream(), new ApiError(Instant.now(), 401, "UNAUTHORIZED", "Authentication is required or the access token is invalid", Map.of()));

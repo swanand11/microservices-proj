@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portfolens
+  labels:
+    app.kubernetes.io/part-of: portfolens

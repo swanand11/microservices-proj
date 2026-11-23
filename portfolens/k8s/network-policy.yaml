@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-app-ingress
+  namespace: portfolens
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: frontend } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+      ports:
+        - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 8003 }
+    - from:
+        - podSelector: { matchLabels: { app: api-gateway } }
+      ports:
+        - { protocol: TCP, port: 8001 }
+        - { protocol: TCP, port: 8002 }
+    - from:
+        - podSelector: { matchLabels: { app: analytics-service } }
+      ports:
+        - { protocol: TCP, port: 8001 }
+    - from:
+        - podSelector: { matchLabels: { app: workflow-coordinator } }
+      ports:
+        - { protocol: TCP, port: 8000 }
+    - from:
+        - namespaceSelector: {}
+          podSelector: {}
+      ports:
+        - { protocol: TCP, port: 53 }
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+      ports:
+        - { protocol: TCP, port: 8080 }

@@ -1,0 +1,17 @@
+ALTER TABLE workflow_steps ADD COLUMN next_retry_at TIMESTAMPTZ;
+ALTER TABLE workflow_steps ADD COLUMN last_attempt_at TIMESTAMPTZ;
+ALTER TABLE workflow_steps ADD COLUMN downstream_idempotency_key VARCHAR(255);
+ALTER TABLE workflow_steps ADD COLUMN failure_category VARCHAR(40);
+ALTER TABLE workflow_steps ADD COLUMN compensation_attempt_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE workflow_steps ADD COLUMN result_payload JSONB;
+ALTER TABLE workflow_steps ADD COLUMN target_service VARCHAR(120);
+ALTER TABLE workflow_steps ADD COLUMN operation_identifier VARCHAR(200);
+ALTER TABLE workflow_steps ADD COLUMN mandatory BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE workflow_steps ADD COLUMN timeout_ms BIGINT NOT NULL DEFAULT 10000;
+ALTER TABLE workflow_steps ADD COLUMN compensation_operation VARCHAR(200);
+ALTER TABLE workflow_instances ADD COLUMN lease_owner VARCHAR(160);
+ALTER TABLE workflow_instances ADD COLUMN lease_expires_at TIMESTAMPTZ;
+ALTER TABLE workflow_instances ADD COLUMN owner_user_id UUID;
+CREATE INDEX idx_workflow_steps_retry_due ON workflow_steps(status, next_retry_at);
+CREATE INDEX idx_workflow_instances_lease ON workflow_instances(status, lease_expires_at);
+CREATE INDEX idx_workflow_instances_owner_created ON workflow_instances(owner_user_id, created_at DESC);

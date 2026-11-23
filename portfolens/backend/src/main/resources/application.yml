@@ -5,6 +5,7 @@ spring:
     # DatabaseUrlConfiguration normalizes Supabase URI and JDBC formats and
     # extracts URL credentials for Hikari. Split variables are also supported.
     driver-class-name: org.postgresql.Driver
+    # The datasource bean applies the DB_POOL_* settings to its Hikari instance.
   jpa:
     hibernate:
       ddl-auto: update
@@ -24,7 +25,29 @@ spring:
     publisher-confirm-type: correlated
     publisher-returns: true
 server:
-  port: ${SERVER_PORT:8000}
+  # Keep Docker/Kubernetes at 8000 via SERVER_PORT, while a direct local run
+  # can coexist with the Compose gateway published on host port 8000.
+  port: ${SERVER_PORT:8009}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
+        liveness:
+          include: livenessState
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
 app:
   jwt:
     secret: ${JWT_SECRET:}

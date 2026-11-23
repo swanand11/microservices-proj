@@ -9,15 +9,18 @@ import com.portfolens.controller.PortfolioController;
 import com.portfolens.repository.UserRepository;
 import com.portfolens.service.AuthService;
 import com.portfolens.service.PortfolioService;
+import com.portfolens.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest({AuthController.class, PortfolioController.class})
+@Import(com.portfolens.config.SecurityConfig.class)
 @TestPropertySource(properties = {
         "app.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
         "app.jwt.expiration-ms=900000"
@@ -27,6 +30,7 @@ class GatewayAuthenticationTest {
     @MockBean AuthService authService;
     @MockBean PortfolioService portfolioService;
     @MockBean UserRepository userRepository;
+    @MockBean JwtService jwtService;
 
     @Test
     void loginRemainsPublic() throws Exception {
